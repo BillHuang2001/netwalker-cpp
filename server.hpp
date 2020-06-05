@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <functional>
+#include <memory>
 #include "common.hpp"
 
 class server_session : public std::enable_shared_from_this<server_session>
@@ -21,7 +22,7 @@ public:
     void start(){
         ws_.async_accept([self=shared_from_this()](const std::error_code& error){
             if(!error){
-                self->read_client_hand_shake();
+                self->read_handshake();
             }
             else{
                 logger::print_log(error,0);
@@ -34,7 +35,7 @@ public:
     }
 
 private:
-    void read_client_hand_shake(){
+    void read_handshake(){
         ws_.async_read(buffer_,[self=shared_from_this()](const std::error_code& error, size_t length){
             std::cout << beast::buffers_to_string(self->buffer_.data()) << std::endl;
         });
@@ -47,7 +48,7 @@ private:
 class netwalker_server
 {
 public:
-    netwalker_server(asio::io_context& ioc, u16 listen_port) : acceptor_(ioc, tcp::endpoint(tcp::v4(), listen_port))
+    netwalker_server(asio::io_context& ioc, u16 listen_port) : ioc_(ioc),acceptor_(ioc, tcp::endpoint(tcp::v4(), listen_port))
     {
         start();
     }
@@ -55,7 +56,7 @@ public:
 private:
     void start()
     {
-        auto session = server_session::pointer();
+        auto session = std::make_shared<server_session>(ioc_);
 
         acceptor_.async_accept(session->get_socket(), [session](const std::error_code& error){
             if(!error){
@@ -67,6 +68,7 @@ private:
         });
     }
 
+    asio::io_context& ioc_;
     asio::ip::tcp::acceptor acceptor_;
 };
 
