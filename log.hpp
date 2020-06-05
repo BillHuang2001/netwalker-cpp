@@ -13,8 +13,18 @@ enum LOG_LEVEL{
     DEBUG=3
 };
 
-class log {
-    void print_log(const std::string &message, const char& level) //0-error 1-warning 2-info debug
+class logger {
+public:
+    static void print_log(const std::error_code& error, const char& level){
+        if(level == 0){
+            std::cerr << error << " " << error.message() << std::endl;
+        }
+        else if (level <= output_level_){
+            std::cout << error << " " << error.message() << std::endl;
+        }
+    }
+
+    static void print_log(const std::string &message, const char& level) //0-error 1-warning 2-info debug
     {
         if(level == 0){
             std::cerr << message << std::endl;
@@ -24,13 +34,13 @@ class log {
         }
     }
 
-    void set_output_level(const char& level){
+    static void set_output_level(const char& level){
         output_level_ = level;
     }
 
     static char output_level_;
 };
 
-char log::output_level_ = LOG_LEVEL::DEBUG;
+char logger::output_level_ = LOG_LEVEL::DEBUG;
 
 #endif //NETWALKER_LOG_HPP

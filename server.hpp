@@ -9,17 +9,49 @@
 #include <functional>
 #include "common.hpp"
 
-class ws_server_session : public std::enable_shared_from_this<ws_server_session>
+class server_session : public std::enable_shared_from_this<server_session>
 {
-    ws_server_session()
+public:
+    typedef std::shared_ptr<server_session> pointer;
+    server_session()
     {
 
     }
+
+    void start(){
+
+    }
+
+    tcp::socket& get_socket(){
+
+    }
+
 };
 
-class ws_server
+class netwalker_server
 {
-    ws_server
+public:
+    netwalker_server(asio::io_context& ioc) : acceptor_(ioc)
+    {
+        start();
+    }
+
+private:
+    void start()
+    {
+        auto session = server_session::pointer();
+
+        acceptor_.async_accept(session->get_socket(), [session](const std::error_code& error){
+            if(!error){
+                session->start();
+            }
+            else{
+                logger::print_log(error,0);
+            }
+        });
+    }
+
+    asio::ip::tcp::acceptor acceptor_;
 };
 
 
