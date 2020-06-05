@@ -13,4 +13,9 @@
 using namespace boost;
 using tcp = asio::ip::tcp;
 
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef long long i64;
+typedef unsigned long long u64;
+
 #endif //NETWALKER_COMMON_HPP

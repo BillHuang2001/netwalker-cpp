@@ -17,16 +17,26 @@ int main() {
     ioc.run();
 #else
     asio::io_context ioc;
+
+    asio::signal_set signals(ioc, SIGINT, SIGTERM);
+    signals.async_wait([&ioc](boost::system::error_code const&, int){
+        // Stop the io_context. This will cause run()
+        // to return immediately, eventually destroying the
+        // io_context and any remaining handlers in it.
+        ioc.stop();
+    });
+
     // Run the I/O service on the requested number of threads
     std::vector<std::thread> threads_list;
     int num_threads = 4;
     threads_list.reserve(num_threads - 1);
-    for(auto i = num_threads - 1; i > 0; i--)
+    for(auto i = num_threads - 1; i > 0; i--) {
         threads_list.emplace_back(
-                [&ioc]
-                {
-                    ioc.run();
-                });
+            [&ioc]() {
+                ioc.run();
+            }
+        );
+    }
     ioc.run();
 
     for(auto& walker : threads_list)
