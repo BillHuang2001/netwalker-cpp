@@ -10,14 +10,14 @@
 
 void cipher::calc_to(std::vector<unsigned char> &from, size_t len, unsigned char* to)
 {
-    for(int i=0; i<len; i++){
+    for(unsigned long i=0; i<len; i++){
         to[i] = from[i] ^ dist(generator);
     }
 }
 
 void cipher::calc(std::vector<unsigned char> &arr, size_t len)
 {
-    for(int i=0; i<len; i++){
+    for(unsigned long i=0; i<len; i++){
         arr[i] = arr[i] ^ dist(generator);
     }
 }

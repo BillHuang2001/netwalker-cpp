@@ -1,7 +1,5 @@
 #include <iostream>
 #include <thread>
-#include <boost/beast.hpp>
-#include <boost/asio.hpp>
 #include "common.hpp"
 
 #include "server.hpp"
@@ -28,11 +26,11 @@ int main() {
         });
 
         netwalker_server server(ioc, 1234);
-        netwalker_client client(ioc, "localhost");
+        netwalker_client client(ioc, "localhost", 6666);
         std::cout << "test!" <<std::endl;
         // Run the I/O service on the requested number of threads
         std::vector<std::thread> threads_list;
-        int num_threads = 1;
+        u32 num_threads = 1;
         threads_list.reserve(num_threads - 1);
         for (auto i = num_threads - 1; i > 0; i--) {
             threads_list.emplace_back( [&ioc]() {

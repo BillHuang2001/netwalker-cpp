@@ -23,13 +23,10 @@ public:
         }
     }
 
-    static void print_log(const std::string &message, const char& level) //0-error 1-warning 2-info debug
+    static void print_log(const std::string &message, const char& level, const std::string& additional_message="") //0-error 1-warning 2-info debug
     {
-        if(level == 0){
-            std::cerr << message << std::endl;
-        }
-        else if (level <= output_level_){
-            std::cout << message << "\n";
+        if(level <= output_level_){
+            std::cout << log_type[level] << message << additional_message << std::endl;
         }
     }
 
