@@ -48,7 +48,7 @@ private:
 class netwalker_server
 {
 public:
-    netwalker_server(asio::io_context& ioc, u16 listen_port) : ioc_(ioc),acceptor_(ioc, tcp::endpoint(tcp::v4(), listen_port))
+    netwalker_server(asio::io_context& ioc, u16 listen_port) : ioc_(ioc),acceptor_(ioc, tcp::endpoint(tcp::v6(), listen_port))
     {
         start();
     }
@@ -60,6 +60,7 @@ private:
 
         acceptor_.async_accept(session->get_socket(), [session](const std::error_code& error){
             if(!error){
+                std::cout <<"Accepted"<<std::endl;
                 session->start();
             }
             else{

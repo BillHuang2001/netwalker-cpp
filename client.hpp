@@ -1,5 +1,6 @@
 #include <utility>
 
+
 //
 // Created by bill on 6/5/20.
 //
@@ -10,9 +11,13 @@
 class client_session : public std::enable_shared_from_this<client_session>
 {
 public:
-    explicit client_session(asio::io_context& ioc, tcp::endpoint& host) : ws_(ioc),remote_host_(host)
+    explicit client_session(asio::io_context& ioc) : ws_(ioc)
     {
 
+    }
+
+    static void set_remote_host(tcp::endpoint host){
+        remote_host_ = std::move(host);
     }
 
     void start(){
@@ -21,7 +26,7 @@ public:
                 self->do_ws_handshake();
             }
             else{
-                logger::print_log(error,0);
+                logger::print_log(error,0,__POSITION__);
             }
         });
     }
@@ -33,34 +38,51 @@ private:
                 self->send_handshake();
             }
             else{
-                logger::print_log(error,0);
+                logger::print_log(error,0,__POSITION__);
             }
         });
     }
 
     void send_handshake(){
-        ws_.async_write(buffer_.data(), [self=shared_from_this()](const std::error_code& error, size_t length){
+        ws_.async_write(asio::buffer("hello world, using websocket!"), [self=shared_from_this()](const std::error_code& error, size_t length){
             std::cout << "message sent" <<std::endl;
         });
     }
 
-    beast::flat_buffer buffer_;
+    //beast::flat_buffer buffer_;
     beast::websocket::stream<beast::tcp_stream> ws_;
-    tcp::endpoint remote_host_;
+    static tcp::endpoint remote_host_;
 };
+
+tcp::endpoint client_session::remote_host_ = tcp::endpoint();
 
 class netwalker_client
 {
-    netwalker_client(asio::io_context& ioc, std::string& domain_name) : ioc_(ioc)
+public:
+    netwalker_client(asio::io_context& ioc, const std::string& domain_name) : ioc_(ioc),resolver_(ioc)
     {
-        tcp::resolver resolver(ioc);
-        remote_host_ = *resolver.resolve(domain_name);
-        start();
+        resolver_.async_resolve(domain_name, "", [this](const std::error_code& error, tcp::resolver::results_type results){
+            if(!error) {
+                for(auto temp = results.begin();temp!=results.end();temp++){
+                    std::cout << tcp::endpoint(*temp) <<"\n";
+                }
+
+                tcp::endpoint host(*results);
+                host.port(1234);
+                client_session::set_remote_host(host);
+                start();
+            }
+            else{
+                logger::print_log(error,0, __POSITION__);
+            }
+        });
     }
+
+private:
 
     void start()
     {
-        auto session = std::make_shared<client_session>(ioc_, remote_host_);
+        auto session = std::make_shared<client_session>(ioc_);
 
 //        acceptor_.async_accept(session->get_socket(), [session](const std::error_code& error){
 //            if(!error){
@@ -74,7 +96,7 @@ class netwalker_client
     }
 
     asio::io_context& ioc_;
-    tcp::endpoint remote_host_;
+    asio::ip::tcp::resolver resolver_;
 };
 
 #endif //NETWALKER_CLIENT_HPP

@@ -13,14 +13,13 @@ enum LOG_LEVEL{
     DEBUG=3
 };
 
+const char* log_type[4] = {"\033[31m[ERROR]\033[0m:", "\033[33m[WARN]\033[0m :", "[INFO]: ", "\033[34m[DEGUB]\033[0m:"};
+
 class logger {
 public:
-    static void print_log(const std::error_code& error, const char& level){
-        if(level == 0){
-            std::cerr << error << " " << error.message() << std::endl;
-        }
-        else if (level <= output_level_){
-            std::cout << error << " " << error.message() << std::endl;
+    static void print_log(const std::error_code& error, const char& level, const std::string& additional_message=""){
+        if(level <= output_level_){
+            std::cout << log_type[level] << error << " " << error.message() << additional_message << std::endl;
         }
     }
 

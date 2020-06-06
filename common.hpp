@@ -18,4 +18,8 @@ typedef unsigned int u32;
 typedef long long i64;
 typedef unsigned long long u64;
 
+#define STRINGIZE_DETAIL(x) #x
+#define STRINGIZE(x) STRINGIZE_DETAIL(x)
+#define __POSITION__ (" in: " __FILE__ " line: " STRINGIZE(__LINE__) )
+
 #endif //NETWALKER_COMMON_HPP
