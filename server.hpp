@@ -8,6 +8,7 @@
 #include <iostream>
 #include <functional>
 #include <memory>
+#include "cipher.h"
 #include "common.hpp"
 
 class server_session : public std::enable_shared_from_this<server_session>

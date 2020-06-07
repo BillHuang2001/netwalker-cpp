@@ -1,6 +1,3 @@
-#include <utility>
-
-
 //
 // Created by bill on 6/5/20.
 //
@@ -8,12 +5,19 @@
 #ifndef NETWALKER_CLIENT_HPP
 #define NETWALKER_CLIENT_HPP
 
+#include "common.hpp"
+#include "cipher.h"
+
 class client_session : public std::enable_shared_from_this<client_session>
 {
 public:
-    explicit client_session(asio::io_context& ioc) : ws_(ioc), socket_in_(ioc), buffer_(64)
+    explicit client_session(asio::io_context& ioc) :
+    buffer_(8),encrypt_(passwd_),decrypt_(passwd_),ws_(ioc), socket_in_(ioc),is_ready_(false)
     {
+    }
 
+    static void set_password(const u64& passwd){
+        passwd_ = passwd;
     }
 
     static void set_remote_host(tcp::endpoint host){
@@ -101,35 +105,87 @@ private:
         //        o  DST.PORT desired destination port in network octet
         //        order
 
-        socket_in_.async_receive(asio::buffer(buffer_),
+        socket_in_.async_receive(asio::dynamic_buffer(buffer_),
                               [self=shared_from_this()](const std::error_code& error, size_t length)
                               {
                                   if(!error){
                                       if(self->buffer_[3]==3 && length!=self->buffer_[4]+7) std::cout <<"!debug::error::read not complete"<<std::endl;
                                       if(self->buffer_[0]==5 && self->buffer_[1]==1) {
-                                          self->request_length_ = length;
-                                          if(self->socket_out_status_){
-                                              if(self->verbose_) std::cout <<"tcp handshake finish first"<<std::endl;
-                                              self->socks_request_forward();
-                                          }
-                                          self->request_status_ = true;
+                                          self->socks_request_forward(length);
                                       }
                                       else if(self->buffer_[1] == 3){
-                                          std::cout <<"UDP protocol not supported"<<std::endl;
+                                          logger::print_log("UDP protocol not supported",1);
                                       }
                                   }
                                   else{
-                                      logger::print_log(error,0,__POSITION__)
+                                      logger::print_log(error,0,__POSITION__);
                                   }
                               }
         );
     }
 
+    void socks_request_forward(size_t length)
+    {
+//            asio::socket_base::keep_alive option;
+//            socket_out_.get_option(option);
+//            bool is_set = option.value();
+//            std::cout <<"keep alive is "<< (is_set ? "true":"false") <<std::endl;
+        /*
+                C->S : TOTAL_LENGTH = len -3 +4 +NUM_RANDOM_DIGITS +1
+                SystemTime  Time_Salt   LEN_AFTER     ATYP    DST.ADDR  DST.PORT
+                4           1           1             1       Var       2
+
+                S-C :
+                SystemTime    STATUS
+                4             1
+
+                STATUS: 1-good 0-bad
+        */
+        auto time_salt = static_cast<unsigned char>(rand() % 256);
+        u32 total_length = (u32)length +3;
+        std::vector<unsigned char> message(total_length);
+
+        time_t now = std::time(0);
+        time_t now_bak = now;
+        //filling system time
+        for(u32 i=3; i>=0 ;i--){
+            message[i] = (unsigned char)(now & 255);
+            now >>=8;
+        }
+
+        //filling len_after
+        message[5] = static_cast<unsigned char>(total_length - 6);
+
+        //filling socks5 request
+        for(u32 i=6; i < total_length; i++){
+            message[i] = static_cast<unsigned char>(buffer_[i - 3]);
+        }
+
+        encrypt_.set_seed((u64)now_bak + passwd_ ^ (u64)time_salt << 8);
+        decrypt_.set_seed((u64)now_bak + passwd_ ^ (u64)time_salt << 8);
+
+        encrypt_.calc(message, total_length);
+
+        //filling time salt
+        message[4] = time_salt; //time_salt is plaintext
+
+        ws_.async_write(asio::buffer(message, total_length),
+                [self=shared_from_this()](const std::error_code& error, size_t length){
+                if(!error) {
+                    self->handle_successful_connection();
+                }
+                else{
+                    logger::print_log(error,0,__POSITION__);
+                    self->handle_unsuccessful_connection();
+                }
+            }
+        );
+    }
 
     void do_ws_handshake(){
         ws_.async_handshake("localhost","/",[self=shared_from_this()](const std::error_code& error){
             if(!error){
-                self->send_handshake();
+                self->handle_successful_connection();
             }
             else{
                 logger::print_log(error,0,__POSITION__);
@@ -137,20 +193,84 @@ private:
         });
     }
 
+    void handle_unsuccessful_connection(){
+        close_all();
+    }
+
+    void handle_successful_connection(){
+        if(is_ready_){
+            read_from_socket_in();
+            read_from_socket_out();
+        }
+        else{
+            is_ready_ = true;
+        }
+    }
+
+    void read_from_socket_in(){
+        socket_in_.async_read_some(asio::dynamic_buffer(buffer_), [self=shared_from_this()](const std::error_code& error, size_t length){
+            if(!error){
+                self->write_to_socket_out();
+            }
+            else{
+                self->close_all();
+            }
+        });
+    }
+
+    void write_to_socket_out(){
+        ws_.async_write(asio::buffer(buffer_), [self=shared_from_this()](const std::error_code& error, size_t length){
+            if(!error){
+                self->read_from_socket_in();
+            }
+            else{
+                self->close_all();
+            }
+        });
+    }
+
+    void read_from_socket_out(){
+        ws_.async_read_some(flat_buffer_.data(), [self=shared_from_this()](const std::error_code& error, size_t length){
+            if(!error){
+                self->write_to_socket_in();
+            }
+            else{
+                self->close_all();
+            }
+        });
+    }
+
+    void write_to_socket_in(){
+        asio::write(socket_in_, flat_buffer_, [self=shared_from_this()](const std::error_code& error, size_t length){
+            if(!error){
+                self->read_from_socket_out();
+            }
+            else{
+                self->close_all();
+            }
+        });
+    }
+
+
     void send_handshake(){
         ws_.async_write(asio::buffer("hello world, using websocket!"), [self=shared_from_this()](const std::error_code& error, size_t length){
             std::cout << "message sent" <<std::endl;
         });
     }
 
+    beast::flat_buffer flat_buffer_;
     std::vector<char> buffer_;
+    cipher encrypt_,decrypt_;
     //beast::flat_buffer buffer_;
     beast::websocket::stream<beast::tcp_stream> ws_;
     tcp::socket socket_in_;
     static tcp::endpoint remote_host_;
+    static u64 passwd_;
+    std::atomic<bool> is_ready_{};
 };
 
 tcp::endpoint client_session::remote_host_ = tcp::endpoint();
+u64 client_session::passwd_ = 0;
 
 class netwalker_client
 {
