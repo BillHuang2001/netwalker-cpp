@@ -23,6 +23,7 @@ public:
     void start(){
         ws_.async_accept([self=shared_from_this()](const std::error_code& error){
             if(!error){
+                logger::print_log("ws handshake complete",LOG_LEVEL::DEBUG);
                 self->read_handshake();
             }
             else{
@@ -38,7 +39,12 @@ public:
 private:
     void read_handshake(){
         ws_.async_read(buffer_,[self=shared_from_this()](const std::error_code& error, size_t length){
-            std::cout << beast::buffers_to_string(self->buffer_.data()) << std::endl;
+            if(!error) {
+                std::cout << beast::buffers_to_string(self->buffer_.data()) << std::endl;
+            }
+            else{
+                logger::print_log(error,0,__POSITION__);
+            }
         });
     }
 
