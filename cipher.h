@@ -28,9 +28,13 @@ class cipher
 public:
     void calc(std::vector<unsigned char> &arr, size_t len);
 
+    void calc(std::string& str, size_t len);
+
     void calc_to(std::vector<unsigned char> &from, size_t len, unsigned char* to);
 
-    explicit cipher(unsigned long long passwd);
+    //bool time_test(const std::string& str, const time_t& now, const int& time_diff);
+
+    cipher(unsigned long long passwd);
 
     void set_seed(unsigned long long seed);
 

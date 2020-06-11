@@ -10,17 +10,41 @@
 
 void cipher::calc_to(std::vector<unsigned char> &from, size_t len, unsigned char* to)
 {
-    for(unsigned long i=0; i<len; i++){
+    for(unsigned int i=0; i<len; i++){
         to[i] = from[i] ^ dist(generator);
     }
 }
 
 void cipher::calc(std::vector<unsigned char> &arr, size_t len)
 {
-    for(unsigned long i=0; i<len; i++){
+    for(unsigned int i=0; i<len; i++){
         arr[i] = arr[i] ^ dist(generator);
     }
 }
+
+void cipher::calc(std::string& str, size_t len)
+{
+    for(unsigned int i=0; i<len; i++){
+        str[i] = str[i] ^ dist(generator);
+    }
+}
+
+//bool cipher::time_test(const std::string& str, const time_t& now, const int& time_diff)
+//{
+//    time_t time=0;
+//
+//    for(unsigned int i=0; i<str.size();i++){
+//        if(i < str.size()-4){
+//            generator();
+//        }
+//        else{
+//            time <<=8;
+//            time += (unsigned char)str[i]^dist(generator);
+//        }
+//    }
+//
+//    return std::abs(time - now) == time_diff;
+//}
 
 cipher::cipher(unsigned long long passwd)
 {

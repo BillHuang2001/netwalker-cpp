@@ -126,61 +126,42 @@ private:
 
     void socks_request_forward()
     {
+        //
+        //        +----+-----+-------+------+----------+----------+------------+-------------+------+
+        //        |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT | RAND BYTES | System Time | Rand |
+        //        +----+-----+-------+------+----------+----------+------------+-------------+------+
+        //        | 1  |  1  | X'00' |  1   | Variable |    2     |     Var    |      4      |  1   |
+        //        +----+-----+-------+------+----------+----------+------------+-------------+------+
+        //
+        //        encrypt from [0..-2);
+        //
+
         logger::print_log("forwarding socks5 request",LOG_LEVEL::DEBUG);
-//            asio::socket_base::keep_alive option;
-//            socket_out_.get_option(option);
-//            bool is_set = option.value();
-//            std::cout <<"keep alive is "<< (is_set ? "true":"false") <<std::endl;
-        /*
-                C->S : TOTAL_LENGTH = len -3 +4 +NUM_RANDOM_DIGITS +1
-                SystemTime  Time_Salt   LEN_AFTER     ATYP    DST.ADDR  DST.PORT
-                4           1           1             1       Var       2
-
-                S-C :
-                SystemTime    STATUS
-                4             1
-
-                STATUS: 1-good 0-bad
-        */
         u32 length = buffer_[4]+7;
-        auto time_salt = static_cast<unsigned char>(rand() % 256);
-        u32 total_length = length +3;
-        std::vector<unsigned char> message(total_length);
+        auto random_bytes = static_cast<unsigned char>(rand());
+        u32 total_length = length + 1 + random_bytes%32;
+        buffer_[total_length-1] = random_bytes;
 
-        time_t now = std::time(nullptr);
-        time_t now_bak = now;
-        //filling system time
-        for(int i=3; i>=0 ;i--){
-            //std::cout <<"CHECK POINT 1.5 i:"<<i<<std::endl;
-            message[i] = (unsigned char)(now & 255);
-            now >>=8;
+        for(auto i = length; i < total_length-5; i++){
+            buffer_[i] = static_cast<unsigned char>(rand());
         }
 
-        //filling len_after
-        message[5] = static_cast<unsigned char>(total_length - 6);
+        time_t now = time(nullptr);
+        *(time_t*)(buffer_.data()+total_length-5) = now;
 
-        //filling socks5 request
-        for(u32 i=6; i < total_length; i++){
-            message[i] = static_cast<unsigned char>(buffer_[i - 3]);
-        }
+        decrypt_.set_seed(passwd_ + buffer_[total_length-2] + buffer_[total_length-1]);
+        encrypt_.set_seed(passwd_ + buffer_[total_length-2] + buffer_[total_length-1]);
 
-        encrypt_.set_seed((u64)now_bak + passwd_ ^ (u64)time_salt << 8u);
-        decrypt_.set_seed((u64)now_bak + passwd_ ^ (u64)time_salt << 8u);
+        encrypt_.calc(buffer_, total_length-2);
 
-        encrypt_.calc(message, total_length);
-
-        //filling time salt
-        message[4] = time_salt; //time_salt is plaintext
-        logger::print_log("sending request",LOG_LEVEL::DEBUG);
-        //ws_.async_write(asio::buffer("Hello World from client"),
-        ws_.async_write(asio::buffer(message, total_length),
+        ws_.async_write(asio::buffer(buffer_, total_length),
                 [self=shared_from_this()](const std::error_code& error, size_t length){
                 if(!error) {
                     self->read_from_socket_in();
                     self->read_from_socket_out();
                 }
                 else{
-                    logger::print_log(error,0,__POSITION__);
+                    logger::print_log(error,0, __POSITION__);
                     self->handle_unsuccessful_connection();
                 }
             }
@@ -269,7 +250,6 @@ private:
     tcp::socket socket_in_;
     static tcp::endpoint remote_host_;
     static u64 passwd_;
-    size_t sock5_request_length;
     std::atomic<bool> is_ready_{};
 };
 
