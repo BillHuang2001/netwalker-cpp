@@ -18,7 +18,7 @@ class server_session : public std::enable_shared_from_this<server_session>
 {
 public:
     typedef std::shared_ptr<server_session> pointer;
-    explicit server_session(asio::io_context& ioc) : ws_(ioc),socket_out_(ioc),resolver_(ioc),encrypt_(passwd_),decrypt_(passwd_)
+    explicit server_session(asio::io_context& ioc) : ws_(ioc),socket_out_(ioc),resolver_(ioc),encrypt_(passwd_),decrypt_(passwd_),is_ready_(false)
     {
 
     }
@@ -44,23 +44,21 @@ public:
         return beast::get_lowest_layer(ws_).socket();
     }
 
-    ~server_session()
-    {
-        try {
-            socket_out_.shutdown(tcp::socket::shutdown_both);
-            ws_.close(beast::websocket::close_code::normal);
-            beast::get_lowest_layer(ws_).socket().shutdown(tcp::socket::shutdown_both);
-        }
-        catch (std::exception& e) {}
-    }
+
 
 private:
     void close_all(){
-        try {
-            socket_out_.close();
+        if(!is_ready_) {
+            is_ready_ = true;
+            ws_.async_close(beast::websocket::close_code::normal,
+                            [self = shared_from_this()](const std::error_code &error) {
+                                try {
+                                    self->socket_out_.close();
+                                }
+                                catch (std::exception &) {}
+                                logger::print_log("server session closed", LOG_LEVEL::INFO);
+                            });
         }
-        catch (std::exception& e) {}
-        logger::print_log("closed",LOG_LEVEL::INFO);
     }
 
     void read_handshake(){
@@ -189,6 +187,9 @@ private:
             if(!error){
                 self->write_to_socket_out();
             }
+            else{
+                self->close_all();
+            }
         });
     }
 
@@ -197,6 +198,9 @@ private:
             if(!error){
                 self->buffer_.consume(self->buffer_.size());
                 self->read_from_socket_in();
+            }
+            else{
+                self->close_all();
             }
         });
     }
@@ -208,6 +212,9 @@ private:
                 self->buffer_out_.commit(length);
                 self->write_to_socket_in();
             }
+            else{
+                self->close_all();
+            }
         });
     }
 
@@ -217,8 +224,12 @@ private:
                 self->buffer_out_.consume(self->buffer_out_.size());
                 self->read_from_socket_out();
             }
+            else{
+                self->close_all();
+            }
         });
     }
+
 
     beast::websocket::stream<beast::tcp_stream> ws_;
     tcp::socket socket_out_;
@@ -226,6 +237,7 @@ private:
     beast::flat_buffer buffer_, buffer_out_;
     static u64 passwd_;
     cipher encrypt_,decrypt_;
+    std::atomic<bool> is_ready_{};
 };
 
 u64 server_session::passwd_ = 0;
