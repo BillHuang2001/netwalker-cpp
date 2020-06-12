@@ -8,11 +8,13 @@
 #include "common.hpp"
 #include "cipher.h"
 
+#define MOD 32
+
 class client_session : public std::enable_shared_from_this<client_session>
 {
 public:
     explicit client_session(asio::io_context& ioc) :
-    buffer_(256),encrypt_(passwd_),decrypt_(passwd_),ws_(ioc), socket_in_(ioc),is_ready_(false)
+    buffer_(2048),encrypt_(passwd_),decrypt_(passwd_),ws_(ioc), socket_in_(ioc),is_ready_(false)
     {
     }
 
@@ -41,10 +43,23 @@ public:
         return socket_in_;
     }
 
+    ~client_session()
+    {
+        try {
+            socket_in_.shutdown(tcp::socket::shutdown_both);
+            ws_.close(beast::websocket::close_code::normal);
+            beast::get_lowest_layer(ws_).socket().shutdown(tcp::socket::shutdown_both);
+        }
+        catch (std::exception& e) {}
+    }
+
 private:
     void close_all(){
-        socket_in_.close();
-        ws_.async_close(beast::websocket::close_code::none,[self=shared_from_this()](const std::error_code&){});
+        try {
+            socket_in_.close();
+        }
+        catch (std::exception& e) {}
+        logger::print_log("closed",LOG_LEVEL::INFO);
     }
 
     void read_socks5_header(){
@@ -75,7 +90,7 @@ private:
                   self->read_socks5_request();
               }
               else{
-                  std::cout <<"In client -> send_reply: "<< error <<' '<< error.message() <<std::endl;
+                  logger::print_log(error,0,__POSITION__);
               }
             }
         );
@@ -138,9 +153,9 @@ private:
 
         logger::print_log("forwarding socks5 request",LOG_LEVEL::DEBUG);
         u32 length = buffer_[4]+7;
+
         auto random_bytes = static_cast<unsigned char>(rand());
-        u32 total_length = length + 1 + random_bytes%32;
-        buffer_[total_length-1] = random_bytes;
+        u32 total_length = length + 5 + random_bytes%MOD;
 
         for(auto i = length; i < total_length-5; i++){
             buffer_[i] = static_cast<unsigned char>(rand());
@@ -148,24 +163,49 @@ private:
 
         time_t now = time(nullptr);
         *(time_t*)(buffer_.data()+total_length-5) = now;
-
+        buffer_[total_length-1] = random_bytes;
         decrypt_.set_seed(passwd_ + buffer_[total_length-2] + buffer_[total_length-1]);
         encrypt_.set_seed(passwd_ + buffer_[total_length-2] + buffer_[total_length-1]);
+        logger::print_log("request sent:",LOG_LEVEL::DEBUG);
+        std::cout <<"random choosen: "<<(unsigned int)random_bytes<<"\n";
+        for(unsigned int i=0;i<total_length;i++){
+            std::cout <<(unsigned int)buffer_[i]<<" ";
+        }
+        std::cout <<"\n";
+        auto *message = new unsigned char[total_length];
+        encrypt_.calc_to(buffer_, total_length-2, message);
+        message[total_length-2] = buffer_[total_length-2];
+        message[total_length-1] = buffer_[total_length-1];
 
-        encrypt_.calc(buffer_, total_length-2);
-
-        ws_.async_write(asio::buffer(buffer_, total_length),
-                [self=shared_from_this()](const std::error_code& error, size_t length){
+        ws_.binary(true);
+        ws_.async_write(asio::buffer(message, total_length),
+                [self=shared_from_this(), message](const std::error_code& error, size_t length){
                 if(!error) {
-                    self->read_from_socket_in();
-                    self->read_from_socket_out();
+                    self->send_socks5_reply_successful();
+                    logger::print_log("client connect successful",LOG_LEVEL::DEBUG);
                 }
                 else{
                     logger::print_log(error,0, __POSITION__);
                     self->handle_unsuccessful_connection();
                 }
+                free(message);
             }
         );
+    }
+
+    void send_socks5_reply_successful(){
+        buffer_[1] = 0;
+        asio::async_write(socket_in_, asio::buffer(buffer_, buffer_[4]+7), [self=shared_from_this()](const std::error_code& error, size_t length){
+            if(!error){
+                self->flat_buffer_.clear();
+                self->read_from_socket_in();
+                self->read_from_socket_out();
+                logger::print_log("reply 2 complete",LOG_LEVEL::DEBUG);
+            }
+            else{
+                logger::print_log(error,0,__POSITION__);
+            }
+        });
     }
 
     void do_ws_handshake(){
@@ -180,7 +220,10 @@ private:
     }
 
     void handle_unsuccessful_connection(){
-        close_all();
+        buffer_[1] = 4;
+        asio::async_write(socket_in_, asio::buffer(buffer_, buffer_[4]+7), [self=shared_from_this()](const std::error_code& error, size_t length){
+            self->close_all();
+        });
     }
 
     void handle_successful_connection(){
@@ -195,43 +238,33 @@ private:
     void read_from_socket_in(){
         socket_in_.async_read_some(asio::buffer(buffer_), [self=shared_from_this()](const std::error_code& error, size_t length){
             if(!error){
-                self->write_to_socket_out();
-            }
-            else{
-                self->close_all();
+                self->write_to_socket_out(length);
             }
         });
     }
 
-    void write_to_socket_out(){
-        ws_.async_write(asio::buffer(buffer_), [self=shared_from_this()](const std::error_code& error, size_t length){
+    void write_to_socket_out(const size_t length){
+        ws_.async_write(asio::buffer(buffer_,length), [self=shared_from_this()](const std::error_code& error, size_t){
             if(!error){
                 self->read_from_socket_in();
-            }
-            else{
-                self->close_all();
             }
         });
     }
 
     void read_from_socket_out(){
-        ws_.async_read(flat_buffer_, [self=shared_from_this()](const std::error_code& error, size_t length){
+        ws_.async_read(flat_buffer_, [self=shared_from_this()](const std::error_code& error, size_t){
             if(!error){
+                //self->flat_buffer_.commit(length);
                 self->write_to_socket_in();
-            }
-            else{
-                self->close_all();
             }
         });
     }
 
     void write_to_socket_in(){
-        asio::async_write(socket_in_, flat_buffer_.data(), [self=shared_from_this()](const std::error_code& error, size_t length){
+        asio::async_write(socket_in_, flat_buffer_.data(), [self=shared_from_this()](const std::error_code& error, size_t){
             if(!error){
+                self->flat_buffer_.consume(self->flat_buffer_.size());
                 self->read_from_socket_out();
-            }
-            else{
-                self->close_all();
             }
         });
     }
@@ -285,13 +318,14 @@ private:
     {
         auto session = std::make_shared<client_session>(ioc_);
 
-        acceptor_.async_accept(session->get_socket_in(), [session](const std::error_code& error){
+        acceptor_.async_accept(session->get_socket_in(), [this,session](const std::error_code& error){
             if(!error){
                 session->start();
             }
             else{
                 logger::print_log(error,0);
             }
+            start();
         });
     }
 
