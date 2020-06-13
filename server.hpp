@@ -165,7 +165,7 @@ private:
 
     }
 
-    void try_connect(tcp::endpoint server_endpoint){
+    void try_connect(tcp::endpoint& server_endpoint){
         std::cout <<"endpoint: "<<server_endpoint<<std::endl;
         socket_out_.async_connect(server_endpoint, [self=shared_from_this()](const std::error_code& error){
             if(!error){
@@ -185,6 +185,7 @@ private:
     void read_from_socket_in(){
         ws_.async_read(buffer_, [self=shared_from_this()](const std::error_code& error, size_t){
             if(!error){
+                self->decrypt_.calc(self->buffer_);
                 self->write_to_socket_out();
             }
             else{
@@ -210,6 +211,7 @@ private:
             if(!error){
                 //std::cout <<"incoming message length: "<<length<<"\n";
                 self->buffer_out_.commit(length);
+                self->encrypt_.calc(self->buffer_out_);
                 self->write_to_socket_in();
             }
             else{

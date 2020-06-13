@@ -37,6 +37,6 @@ public:
     static char output_level_;
 };
 
-char logger::output_level_ = LOG_LEVEL::DEBUG;
+char logger::output_level_ = LOG_LEVEL::WARNING;
 
 #endif //NETWALKER_LOG_HPP

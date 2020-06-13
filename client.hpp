@@ -229,6 +229,7 @@ private:
     void read_from_socket_in(){
         socket_in_.async_read_some(asio::buffer(buffer_), [self=shared_from_this()](const std::error_code& error, size_t length){
             if(!error){
+                self->encrypt_.calc(self->buffer_, length);
                 self->write_to_socket_out(length);
             }
             else{
@@ -249,9 +250,10 @@ private:
     }
 
     void read_from_socket_out(){
-        ws_.async_read(flat_buffer_, [self=shared_from_this()](const std::error_code& error, size_t){
+        ws_.async_read(flat_buffer_, [self=shared_from_this()](const std::error_code& error, size_t length){
             if(!error){
-                //self->flat_buffer_.commit(length);
+                //std::cout <<"decrypting data of length" <<length<<"\n";
+                self->decrypt_.calc(self->flat_buffer_);
                 self->write_to_socket_in();
             }
             else{

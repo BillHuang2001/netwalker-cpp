@@ -7,6 +7,8 @@
 
 #include <vector>
 #include <random>
+#include <boost/beast.hpp>
+using namespace boost;
 
 struct xorshift128p
 {
@@ -29,6 +31,8 @@ public:
     void calc(std::vector<unsigned char> &arr, size_t len);
 
     void calc(std::string& str, size_t len);
+
+    void calc(beast::flat_buffer& data);
 
     void calc_to(std::vector<unsigned char> &from, size_t len, unsigned char* to);
 

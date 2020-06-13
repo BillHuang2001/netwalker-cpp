@@ -29,6 +29,14 @@ void cipher::calc(std::string& str, size_t len)
     }
 }
 
+void cipher::calc(beast::flat_buffer& data)
+{
+    auto str = (unsigned char*)data.data().data();
+    for(unsigned int i=0; i<data.data().size(); i++){
+        str[i] = str[i] ^ dist(generator);
+    }
+}
+
 //bool cipher::time_test(const std::string& str, const time_t& now, const int& time_diff)
 //{
 //    time_t time=0;
