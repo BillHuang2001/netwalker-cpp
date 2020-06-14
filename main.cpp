@@ -62,6 +62,8 @@ int main(int argc, char* argv[]) {
     ioc.run();
 #else
     asio::io_context ioc;
+    asio::ssl::context ctx{asio::ssl::context::tls};
+    ctx.set_options(asio::ssl::context::no_sslv2 | asio::ssl::context::no_sslv3);
     try {
         asio::signal_set signals(ioc, SIGINT, SIGTERM);
         signals.async_wait([&ioc](const std::error_code& error, int) {
@@ -80,7 +82,7 @@ int main(int argc, char* argv[]) {
             new netwalker_server(ioc, listen_port, passwd);
         }
         else if(!strcmp(argv[1], "client")) {
-            new netwalker_client(ioc, address, path, listen_port, server_port, passwd);
+            new netwalker_client(ioc, ctx, address, path, listen_port, server_port, passwd);
         }
         else{
             logger::print_log("Unknown args",LOG_LEVEL::ERROR);

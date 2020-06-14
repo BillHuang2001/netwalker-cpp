@@ -13,8 +13,8 @@
 class client_session : public std::enable_shared_from_this<client_session>
 {
 public:
-    explicit client_session(asio::io_context& ioc) :
-    buffer_(2048),encrypt_(passwd_),decrypt_(passwd_),ws_(ioc), socket_in_(ioc),is_ready_(false)
+    explicit client_session(asio::io_context& ioc, asio::ssl::context& ctx) :
+    buffer_(2048),encrypt_(passwd_),decrypt_(passwd_),ws_(ioc,ctx), socket_in_(ioc),is_ready_(false)
     {
     }
 
@@ -32,9 +32,11 @@ public:
     }
 
     void start(){
+        //The magic code that will enable TLS-SNI
+        SSL_set_tlsext_host_name(ws_.next_layer().native_handle(),address.data());
         beast::get_lowest_layer(ws_).socket().async_connect(remote_host_, [self=shared_from_this()](const std::error_code& error){
             if(!error){
-                self->do_ws_handshake();
+                self->do_ssl_handshake();
             }
             else{
                 logger::print_log(error,0,__POSITION__);
@@ -203,6 +205,19 @@ private:
         });
     }
 
+    void do_ssl_handshake(){
+        //ws_.next_layer().set_verify_callback(asio::ssl::rfc2818_verification(address));
+
+        ws_.next_layer().async_handshake(asio::ssl::stream_base::client,[self=shared_from_this()](const std::error_code& error){
+            if(!error){
+                self->do_ws_handshake();
+            }
+            else{
+                logger::print_log(error,0,__POSITION__);
+            }
+        });
+    }
+
     void do_ws_handshake(){
         ws_.async_handshake(address,path,[self=shared_from_this()](const std::error_code& error){
             if(!error){
@@ -293,7 +308,7 @@ private:
     beast:: flat_buffer flat_buffer_;
     std::vector<unsigned char> buffer_;
     cipher encrypt_,decrypt_;
-    beast::websocket::stream<beast::tcp_stream> ws_;
+    beast::websocket::stream<beast::ssl_stream<beast::tcp_stream> > ws_;
     tcp::socket socket_in_;
     static tcp::endpoint remote_host_;
     static u64 passwd_;
@@ -308,7 +323,7 @@ std::string client_session::address, client_session::path;
 class netwalker_client
 {
 public:
-    netwalker_client(asio::io_context& ioc, const std::string& domain_name, const std::string& path, u16 listen_port, u16 server_port, u64 passwd) : ioc_(ioc), acceptor_(ioc,tcp::endpoint(tcp::v6(),listen_port))
+    netwalker_client(asio::io_context& ioc, asio::ssl::context& ctx, const std::string& domain_name, const std::string& path, u16 listen_port, u16 server_port, u64 passwd) : ioc_(ioc), ctx_(ctx), acceptor_(ioc,tcp::endpoint(tcp::v6(),listen_port))
     {
         client_session::set_password(passwd);
         auto resolver = make_shared<tcp::resolver>(ioc);
@@ -318,6 +333,7 @@ public:
             if(!error) {
                 tcp::endpoint host(*results);
                 host.port(server_port);
+                //host.address(asio::ip::make_address("168.62.28.78"));
                 client_session::set_remote_host(host);
                 start();
             }
@@ -332,7 +348,7 @@ private:
 
     void start()
     {
-        auto session = std::make_shared<client_session>(ioc_);
+        auto session = std::make_shared<client_session>(ioc_, ctx_);
 
         acceptor_.async_accept(session->get_socket_in(), [this,session](const std::error_code& error){
             if(!error){
@@ -345,6 +361,7 @@ private:
         });
     }
 
+    asio::ssl::context& ctx_;
     asio::io_context& ioc_;
     tcp::acceptor acceptor_;
 };

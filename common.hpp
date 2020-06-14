@@ -8,6 +8,8 @@
 
 #include <boost/beast.hpp>
 #include <boost/asio.hpp>
+#include <boost/asio/ssl.hpp>
+#include <boost/beast/ssl/ssl_stream.hpp>
 #include "log.hpp"
 
 using namespace boost;
