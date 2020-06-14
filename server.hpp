@@ -182,7 +182,7 @@ private:
     }
 
     void try_connect_range(tcp::resolver::results_type results){
-        asio::async_connect(socket_out_, results.begin(), results.end(), [self=shared_from_this()](const std::error_code& error){
+        asio::async_connect(socket_out_, results, [self=shared_from_this()](const std::error_code& error, const tcp::endpoint& endpoint){
             if(!error){
                 self->ws_.binary(true);
                 self->read_from_socket_in();
