@@ -24,13 +24,15 @@ int main(int argc, char* argv[]) {
     int opt;
     std::string address,path;
     unsigned short listen_port, verbose_level, server_port=443;
+    u32 num_threads = 1;
+
     u64 passwd=0;
     for(unsigned int i=0;i<strlen(argv[2]);i++){
         passwd *= 107;
         passwd += argv[2][i];
     }
-    std::cout <<"GOOD"<<std::endl;
-    while((opt=getopt(argc-2,argv+2,"v:l:s:p:x:"))!=-1){
+
+    while((opt=getopt(argc-2,argv+2,"v:l:s:p:x:t:"))!=-1){
         switch(opt)
         {
             case 'v'://verbose
@@ -49,6 +51,9 @@ int main(int argc, char* argv[]) {
             case 'x':
                 server_port = (unsigned short) std::strtoul(optarg, nullptr, 0);
                 break;
+            case 't':
+                num_threads = (u32)std::strtoul(optarg, nullptr, 0);
+                if(num_threads > 8) num_threads=8;
             default:
                 //do nothing
                 break;
@@ -89,7 +94,6 @@ int main(int argc, char* argv[]) {
 
         // Run the I/O service on the requested number of threads
         std::vector<std::thread> threads_list;
-        u32 num_threads = 1;
         threads_list.reserve(num_threads - 1);
         for (auto i = num_threads - 1; i > 0; i--) {
             threads_list.emplace_back( [&ioc]() {

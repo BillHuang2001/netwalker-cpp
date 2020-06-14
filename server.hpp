@@ -181,11 +181,6 @@ private:
         ws_.async_read(buffer_, [self=shared_from_this()](const std::error_code& error, size_t){
             if(!error){
                 self->decrypt_.calc(self->buffer_);
-//                auto tmp = beast::buffers_to_string(self->buffer_.data());
-//                for(int i=0;i<tmp.size();i++){
-//                    std::cout<<(unsigned char)tmp[i]<<" ";
-//                }
-//                std::cout <<"\n";
                 self->write_to_socket_out();
             }
             else{
@@ -209,7 +204,6 @@ private:
     void read_from_socket_out(){
         socket_out_.async_read_some(buffer_out_.prepare(2048), [self=shared_from_this()](const std::error_code& error, size_t length){
             if(!error){
-                //std::cout <<"incoming message length: "<<length<<"\n";
                 self->buffer_out_.commit(length);
                 self->encrypt_.calc(self->buffer_out_);
                 self->write_to_socket_in();

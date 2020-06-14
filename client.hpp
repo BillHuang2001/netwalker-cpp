@@ -249,10 +249,6 @@ private:
     void read_from_socket_in(){
         socket_in_.async_read_some(asio::buffer(buffer_), [self=shared_from_this()](const std::error_code& error, size_t length){
             if(!error){
-//                for(int i=0;i<length;i++){
-//                    std::cout <<(unsigned char)self->buffer_[i]<<" ";
-//                }
-//                std::cout <<"\n";
                 self->encrypt_.calc(self->buffer_, length);
                 self->write_to_socket_out(length);
             }
@@ -274,7 +270,7 @@ private:
     }
 
     void read_from_socket_out(){
-        ws_.async_read(flat_buffer_, [self=shared_from_this()](const std::error_code& error, size_t length){
+        ws_.async_read(flat_buffer_, [self=shared_from_this()](const std::error_code& error, size_t){
             if(!error){
                 //std::cout <<"decrypting data of length" <<length<<"\n";
                 self->decrypt_.calc(self->flat_buffer_);
@@ -316,7 +312,7 @@ std::string client_session::address, client_session::path;
 class netwalker_client
 {
 public:
-    netwalker_client(asio::io_context& ioc, asio::ssl::context& ctx, const std::string& domain_name, const std::string& path, u16 listen_port, u16 server_port, u64 passwd) : ioc_(ioc), ctx_(ctx), acceptor_(ioc,tcp::endpoint(tcp::v6(),listen_port))
+    netwalker_client(asio::io_context& ioc, asio::ssl::context& ctx, const std::string& domain_name, const std::string& path, u16 listen_port, u16 server_port, u64 passwd) : ctx_(ctx), ioc_(ioc), acceptor_(ioc,tcp::endpoint(tcp::v6(),listen_port))
     {
         client_session::set_password(passwd);
         auto resolver = make_shared<tcp::resolver>(ioc);
