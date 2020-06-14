@@ -127,13 +127,17 @@ private:
 
                 logger::print_log(domain_name,LOG_LEVEL::INFO);
 
-                resolver_.async_resolve(domain_name,"",
+                resolver_.async_resolve(domain_name,"https",
                                         [port_num, self=shared_from_this()](const std::error_code& error, tcp::resolver::results_type results){
                                             if(!error){
-                                                tcp::endpoint server_endpoint = results->endpoint();
-                                                server_endpoint.port(port_num);
-
-                                                self->try_connect(server_endpoint);
+                                                if(port_num==443){
+                                                    self->try_connect_range(std::move(results));
+                                                }
+                                                else {
+                                                    tcp::endpoint server_endpoint = results->endpoint();
+                                                    server_endpoint.port(port_num);
+                                                    self->try_connect(server_endpoint);
+                                                }
                                             }
                                             else{
                                                 logger::print_log(error,0,__POSITION__);
@@ -165,6 +169,20 @@ private:
 
     void try_connect(tcp::endpoint& server_endpoint){
         socket_out_.async_connect(server_endpoint, [self=shared_from_this()](const std::error_code& error){
+            if(!error){
+                self->ws_.binary(true);
+                self->read_from_socket_in();
+                self->read_from_socket_out();
+                logger::print_log("Connect successful",LOG_LEVEL::DEBUG);
+            }
+            else{
+                logger::print_log(error,0,__POSITION__);
+            }
+        });
+    }
+
+    void try_connect_range(tcp::resolver::results_type results){
+        asio::async_connect(socket_out_, results.begin(), results.end(), [self=shared_from_this()](const std::error_code& error){
             if(!error){
                 self->ws_.binary(true);
                 self->read_from_socket_in();

@@ -17,6 +17,7 @@ int main(int argc, char* argv[]) {
         std::cout <<"-l local listen port       default: 6666\n";
         std::cout <<"-s server address          default: none\n";
         std::cout <<"-p path                    default: /\n";
+        std::cout <<"-t number of threads       default: 1\n";
         std::cout <<"-x server port             default: 443"<<std::endl;
         return 0;
     }
