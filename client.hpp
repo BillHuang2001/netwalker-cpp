@@ -76,7 +76,7 @@ private:
                         self->send_socks5_reply();
                     }
                     else{
-                        std::cout <<"Unknown protocol or authentication method not supported, header is"<<(int)self->buffer_[0]<<" "<<(int)self->buffer_[1]<<" "<<(int)self->buffer_[2]<<std::endl;
+                        logger::print_log("Unknown protocol",LOG_LEVEL::WARNING);
                     }
                 }
                 else {
@@ -298,13 +298,6 @@ private:
         });
     }
 
-
-    void send_handshake(){
-        ws_.async_write(asio::buffer("hello world, using websocket!"), [self=shared_from_this()](const std::error_code& error, size_t){
-            std::cout << "message sent" <<std::endl;
-        });
-    }
-
     beast:: flat_buffer flat_buffer_;
     std::vector<unsigned char> buffer_;
     cipher encrypt_,decrypt_;
@@ -333,7 +326,6 @@ public:
             if(!error) {
                 tcp::endpoint host(*results);
                 host.port(server_port);
-                //host.address(asio::ip::make_address("168.62.28.78"));
                 client_session::set_remote_host(host);
                 start();
             }

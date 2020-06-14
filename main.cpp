@@ -78,7 +78,6 @@ int main(int argc, char* argv[]) {
         });
 
         if(!strcmp(argv[1], "server")) {
-            std::cout <<"Server! "<<listen_port<<" "<<passwd;
             new netwalker_server(ioc, listen_port, passwd);
         }
         else if(!strcmp(argv[1], "client")) {
