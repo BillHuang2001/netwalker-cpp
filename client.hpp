@@ -26,6 +26,11 @@ public:
         remote_host_ = std::move(host);
     }
 
+    static void set_address_and_path(const std::string& address, const std::string& path){
+        client_session::address = address;
+        client_session::path = path;
+    }
+
     void start(){
         beast::get_lowest_layer(ws_).socket().async_connect(remote_host_, [self=shared_from_this()](const std::error_code& error){
             if(!error){
@@ -199,7 +204,7 @@ private:
     }
 
     void do_ws_handshake(){
-        ws_.async_handshake("localhost","/",[self=shared_from_this()](const std::error_code& error){
+        ws_.async_handshake(address,path,[self=shared_from_this()](const std::error_code& error){
             if(!error){
                 self->handle_successful_connection();
             }
@@ -229,6 +234,10 @@ private:
     void read_from_socket_in(){
         socket_in_.async_read_some(asio::buffer(buffer_), [self=shared_from_this()](const std::error_code& error, size_t length){
             if(!error){
+//                for(int i=0;i<length;i++){
+//                    std::cout <<(unsigned char)self->buffer_[i]<<" ";
+//                }
+//                std::cout <<"\n";
                 self->encrypt_.calc(self->buffer_, length);
                 self->write_to_socket_out(length);
             }
@@ -288,26 +297,27 @@ private:
     tcp::socket socket_in_;
     static tcp::endpoint remote_host_;
     static u64 passwd_;
+    static std::string address, path;
     std::atomic<bool> is_ready_{};
 };
 
 tcp::endpoint client_session::remote_host_ = tcp::endpoint();
 u64 client_session::passwd_ = 0;
+std::string client_session::address, client_session::path;
 
 class netwalker_client
 {
 public:
-    netwalker_client(asio::io_context& ioc, const std::string& domain_name, u16 listen_port) : ioc_(ioc), acceptor_(ioc,tcp::endpoint(tcp::v6(),listen_port))
+    netwalker_client(asio::io_context& ioc, const std::string& domain_name, const std::string& path, u16 listen_port, u16 server_port, u64 passwd) : ioc_(ioc), acceptor_(ioc,tcp::endpoint(tcp::v6(),listen_port))
     {
+        client_session::set_password(passwd);
         auto resolver = make_shared<tcp::resolver>(ioc);
-        resolver->async_resolve(domain_name, "", [this, resolver](const std::error_code& error, tcp::resolver::results_type results){
+        client_session::set_address_and_path(domain_name,path);
+        logger::print_log(domain_name+path,LOG_LEVEL::INFO);
+        resolver->async_resolve(domain_name, "", [this, resolver, server_port](const std::error_code& error, tcp::resolver::results_type results){
             if(!error) {
-                for(auto temp = results.begin();temp!=results.end();temp++){
-                    std::cout << tcp::endpoint(*temp) <<"\n";
-                }
-
                 tcp::endpoint host(*results);
-                host.port(1234);
+                host.port(server_port);
                 client_session::set_remote_host(host);
                 start();
             }
@@ -315,6 +325,7 @@ public:
                 logger::print_log(error,0, __POSITION__);
             }
         });
+        logger::print_log("client started",LOG_LEVEL::INFO);
     }
 
 private:

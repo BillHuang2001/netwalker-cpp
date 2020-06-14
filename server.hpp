@@ -91,7 +91,6 @@ private:
 
         decrypt_.calc(req,req.size()-2);
 
-
         analyse_socks5_request(req, req.size() - 5 - (unsigned char)(req[req.size() - 1])%MOD);
     }
 
@@ -122,7 +121,6 @@ private:
                 auto domain_len = static_cast<unsigned short>(req[4]);
                 if (domain_len != length - 7) {
                     logger::print_log("Wrong domain name length",LOG_LEVEL::ERROR);
-                    std::cout <<"port:"<<port_num<<" "<<domain_len<<" "<<length<<std::endl;
                     return;
                 }
                 std::string domain_name = req.substr(5,domain_len);
@@ -138,7 +136,7 @@ private:
                                                 self->try_connect(server_endpoint);
                                             }
                                             else{
-                                                std::cout <<"Cannot resolve domain name"<<std::endl;
+                                                logger::print_log(error,0,__POSITION__);
                                             }
                                         }
                 );
@@ -166,12 +164,9 @@ private:
     }
 
     void try_connect(tcp::endpoint& server_endpoint){
-        std::cout <<"endpoint: "<<server_endpoint<<std::endl;
         socket_out_.async_connect(server_endpoint, [self=shared_from_this()](const std::error_code& error){
             if(!error){
                 self->ws_.binary(true);
-                self->buffer_.clear();
-                self->buffer_out_.clear();
                 self->read_from_socket_in();
                 self->read_from_socket_out();
                 logger::print_log("Connect successful",LOG_LEVEL::DEBUG);
@@ -186,6 +181,11 @@ private:
         ws_.async_read(buffer_, [self=shared_from_this()](const std::error_code& error, size_t){
             if(!error){
                 self->decrypt_.calc(self->buffer_);
+//                auto tmp = beast::buffers_to_string(self->buffer_.data());
+//                for(int i=0;i<tmp.size();i++){
+//                    std::cout<<(unsigned char)tmp[i]<<" ";
+//                }
+//                std::cout <<"\n";
                 self->write_to_socket_out();
             }
             else{
@@ -247,8 +247,10 @@ u64 server_session::passwd_ = 0;
 class netwalker_server
 {
 public:
-    netwalker_server(asio::io_context& ioc, u16 listen_port) : ioc_(ioc),acceptor_(ioc, tcp::endpoint(tcp::v6(), listen_port))
+    netwalker_server(asio::io_context& ioc, u16 listen_port, u64 passwd) : ioc_(ioc),acceptor_(ioc, tcp::endpoint(tcp::v6(), listen_port))
     {
+        server_session::set_password(passwd);
+        logger::print_log("server started",LOG_LEVEL::INFO);
         start();
     }
 
@@ -259,11 +261,10 @@ private:
 
         acceptor_.async_accept(session->get_socket(), [this,session](const std::error_code& error){
             if(!error){
-                std::cout <<"Accepted"<<std::endl;
                 session->start();
             }
             else{
-                logger::print_log(error,0);
+                logger::print_log(error,0,__POSITION__);
             }
             start();
         });
