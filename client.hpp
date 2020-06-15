@@ -34,12 +34,12 @@ public:
     void start(){
         //The magic code that will enable TLS-SNI
         SSL_set_tlsext_host_name(ws_.next_layer().native_handle(),address.data());
-        beast::get_lowest_layer(ws_).socket().async_connect(remote_host_, [self=shared_from_this()](const std::error_code& error){
+        beast::get_lowest_layer(ws_).async_connect(remote_host_, [self=shared_from_this()](const std::error_code& error){
             if(!error){
                 self->do_ssl_handshake();
             }
             else{
-                logger::print_log(error,0,__POSITION__);
+                logger::print_log(error,0,STRINGIZE(__LINE__));
             }
         });
 
@@ -80,7 +80,7 @@ private:
                     }
                 }
                 else {
-                    logger::print_log(error,0,__POSITION__);
+                    logger::print_log(error,0,STRINGIZE(__LINE__));
                 }
             }
         );
@@ -95,7 +95,7 @@ private:
                   self->read_socks5_request();
               }
               else{
-                  logger::print_log(error,0,__POSITION__);
+                  logger::print_log(error,0,STRINGIZE(__LINE__));
               }
             }
         );
@@ -138,7 +138,7 @@ private:
                                       }
                                   }
                                   else{
-                                      logger::print_log(error,0,__POSITION__);
+                                      logger::print_log(error,0,STRINGIZE(__LINE__));
                                   }
                               }
         );
@@ -183,7 +183,7 @@ private:
                     self->send_socks5_reply_successful();
                 }
                 else{
-                    logger::print_log(error,0, __POSITION__);
+                    logger::print_log(error,0, STRINGIZE(__LINE__));
                     self->handle_unsuccessful_connection();
                 }
                 delete[] message;
@@ -200,7 +200,7 @@ private:
                 self->read_from_socket_out();
             }
             else{
-                logger::print_log(error,0,__POSITION__);
+                logger::print_log(error,0,STRINGIZE(__LINE__));
             }
         });
     }
@@ -213,7 +213,7 @@ private:
                 self->do_ws_handshake();
             }
             else{
-                logger::print_log(error,0,__POSITION__);
+                logger::print_log(error,0,STRINGIZE(__LINE__));
             }
         });
     }
@@ -224,7 +224,7 @@ private:
                 self->handle_successful_connection();
             }
             else{
-                logger::print_log(error,0,__POSITION__);
+                logger::print_log(error,0,STRINGIZE(__LINE__));
             }
         });
     }
@@ -297,7 +297,7 @@ private:
     beast:: flat_buffer flat_buffer_;
     std::vector<unsigned char> buffer_;
     cipher encrypt_,decrypt_;
-    beast::websocket::stream<beast::ssl_stream<beast::tcp_stream> > ws_;
+    beast::websocket::stream<asio::ssl::stream<tcp::socket> > ws_;
     tcp::socket socket_in_;
     static tcp::endpoint remote_host_;
     static u64 passwd_;
@@ -326,7 +326,7 @@ public:
                 start();
             }
             else{
-                logger::print_log(error,0, __POSITION__);
+                logger::print_log(error,0, STRINGIZE(__LINE__));
             }
         });
         logger::print_log("client started",LOG_LEVEL::INFO);
@@ -343,7 +343,7 @@ private:
                 session->start();
             }
             else{
-                logger::print_log(error,0, __POSITION__);
+                logger::print_log(error,0, STRINGIZE(__LINE__));
             }
             start();
         });

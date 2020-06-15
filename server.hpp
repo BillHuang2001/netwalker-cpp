@@ -18,7 +18,7 @@ class server_session : public std::enable_shared_from_this<server_session>
 {
 public:
     typedef std::shared_ptr<server_session> pointer;
-    explicit server_session(asio::io_context& ioc) : ws_(ioc),socket_out_(ioc),resolver_(ioc),encrypt_(passwd_),decrypt_(passwd_),is_ready_(false)
+    explicit server_session(asio::io_context& ioc) : ws_(ioc),socket_out_(ioc),encrypt_(passwd_),decrypt_(passwd_),is_ready_(false)
     {
 
     }
@@ -67,7 +67,7 @@ private:
                 self->handle_client_request();
             }
             else{
-                logger::print_log(error,0,__POSITION__);
+                logger::print_log(error,0,STRINGIZE(__LINE__));
             }
         });
     }
@@ -126,8 +126,8 @@ private:
                 std::string domain_name = req.substr(5,domain_len);
 
                 logger::print_log(domain_name,LOG_LEVEL::INFO);
-
-                resolver_.async_resolve(domain_name,"https",
+                tcp::resolver resolver(socket_out_.get_executor().context());
+                resolver.async_resolve(domain_name,"https",
                                         [port_num, self=shared_from_this()](const std::error_code& error, tcp::resolver::results_type results){
                                             if(!error){
                                                 if(port_num==443){
@@ -140,7 +140,7 @@ private:
                                                 }
                                             }
                                             else{
-                                                logger::print_log(error,0,__POSITION__);
+                                                logger::print_log(error,0,STRINGIZE(__LINE__));
                                             }
                                         }
                 );
@@ -176,7 +176,7 @@ private:
                 logger::print_log("Connect successful",LOG_LEVEL::DEBUG);
             }
             else{
-                logger::print_log(error,0,__POSITION__);
+                logger::print_log(error,0,STRINGIZE(__LINE__));
             }
         });
     }
@@ -190,7 +190,7 @@ private:
                 logger::print_log("Connect successful",LOG_LEVEL::DEBUG);
             }
             else{
-                logger::print_log(error,0,__POSITION__);
+                logger::print_log(error,0,STRINGIZE(__LINE__));
             }
         });
     }
@@ -247,7 +247,6 @@ private:
 
     beast::websocket::stream<beast::tcp_stream> ws_;
     tcp::socket socket_out_;
-    tcp::resolver resolver_;
     beast::flat_buffer buffer_, buffer_out_;
     static u64 passwd_;
     cipher encrypt_,decrypt_;
@@ -276,7 +275,7 @@ private:
                 session->start();
             }
             else{
-                logger::print_log(error,0,__POSITION__);
+                logger::print_log(error,0,STRINGIZE(__LINE__));
             }
             start();
         });
