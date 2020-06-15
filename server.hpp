@@ -62,7 +62,7 @@ private:
     }
 
     void read_handshake(){
-        ws_.async_read(buffer_,[self=shared_from_this()](const std::error_code& error, size_t length){
+        ws_.async_read(buffer_,[self=shared_from_this()](const std::error_code& error, size_t){
             if(!error) {
                 self->handle_client_request();
             }
@@ -90,8 +90,18 @@ private:
         decrypt_.set_seed(passwd_ + (unsigned char)req[req.size()-1] + (unsigned char)req[req.size()-2]);
 
         decrypt_.calc(req,req.size()-2);
+        time_t client_time = *(time_t*)(req.data()+req.size()-5);
 
-        analyse_socks5_request(req, req.size() - 5 - (unsigned char)(req[req.size() - 1])%MOD);
+        if(now - client_time <= TIME_DIFF){
+            analyse_socks5_request(req, req.size() - 5 - (unsigned char)(req[req.size() - 1])%MOD);
+        }
+        else if(client_time - now < TIME_DIFF){
+            logger::print_log("Handshake from the future",LOG_LEVEL::WARNING);
+            analyse_socks5_request(req, req.size() - 5 - (unsigned char)(req[req.size() - 1])%MOD);
+        }
+        else{
+            logger::print_log("Handshake failed",LOG_LEVEL::ERROR);
+        }
     }
 
     void analyse_socks5_request(std::string& req, size_t length)
@@ -126,7 +136,7 @@ private:
                 std::string domain_name = req.substr(5,domain_len);
 
                 logger::print_log(domain_name,LOG_LEVEL::INFO);
-                tcp::resolver resolver(socket_out_.get_executor().context());
+                tcp::resolver resolver(socket_out_.get_executor());
                 resolver.async_resolve(domain_name,"https",
                                         [port_num, self=shared_from_this()](const std::error_code& error, tcp::resolver::results_type results){
                                             if(!error){

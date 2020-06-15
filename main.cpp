@@ -10,7 +10,7 @@ using namespace boost;
 int main(int argc, char* argv[]) {
     std::srand(std::time(0));
     std::cout <<"Welcome to netwalker"<<std::endl;
-    std::cout <<"Version 1.0.0"<<std::endl;
+    std::cout <<"Version 1.0.2"<<std::endl;
     if(argc < 3){
         std::cout <<"Usage: NetWalker {server/client} [password] [options]\n";
         std::cout <<"-v verbose level           default: warning(0)\n";
@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
 
     int opt;
     std::string address,path;
-    unsigned short listen_port, verbose_level, server_port=443;
+    unsigned short listen_port=6666, verbose_level=1, server_port=443;
     u32 num_threads = 1;
 
     u64 passwd=0;
@@ -65,7 +65,36 @@ int main(int argc, char* argv[]) {
 
 #ifdef SINGLE_THREAD
     asio::io_context ioc(1);
-    ioc.run();
+    asio::ssl::context ctx{asio::ssl::context::tls};
+    ctx.set_options(asio::ssl::context::no_sslv2 | asio::ssl::context::no_sslv3);
+    try {
+        asio::signal_set signals(ioc, SIGINT, SIGTERM);
+        signals.async_wait([&ioc](const std::error_code& error, int) {
+            // Stop the io_context. This will cause run()
+            // to return immediately, eventually destroying the
+            // io_context and any remaining handlers in it.
+            if(error){
+                logger::print_log(error,0,__POSITION__);
+            }
+            std::cout <<"Stop signal."<<std::endl;
+            ioc.stop();
+        });
+
+        if(!strcmp(argv[1], "server")) {
+            netwalker_server server(ioc, listen_port, passwd);
+            ioc.run();
+        }
+        else if(!strcmp(argv[1], "client")) {
+            netwalker_client client(ioc, ctx, address, path, listen_port, server_port, passwd);
+            ioc.run();
+        }
+        else{
+            logger::print_log("Unknown args",LOG_LEVEL::ERROR);
+        }
+    }
+    catch(std::exception& e){
+        e.what();
+    }
 #else
     asio::io_context ioc;
     asio::ssl::context ctx{asio::ssl::context::tls};

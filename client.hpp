@@ -89,7 +89,7 @@ private:
     void send_socks5_reply(){
         buffer_[1]=0;
         asio::async_write(socket_in_, asio::buffer(buffer_,2),
-            [self=shared_from_this()](const std::error_code& error, size_t length)
+            [self=shared_from_this()](const std::error_code& error, size_t)
             {
               if(!error){
                   self->read_socks5_request();
